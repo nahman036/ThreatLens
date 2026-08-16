@@ -7,3 +7,4 @@ supabase
 google-generativeai
 watchdog
 psycopg2-binary
+extra-streamlit-components

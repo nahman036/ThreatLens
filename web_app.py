@@ -9,6 +9,7 @@ import time
 import pandas as pd
 import datetime
 from supabase import create_client, Client
+import extra_streamlit_components as stx
 
 # -------------------------------------------------------------
 # 1. PAGE CONFIGURATION & STYLING
@@ -84,7 +85,16 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # -------------------------------------------------------------
-# 2. SUPABASE CLOUD DATABASE CONNECTION
+# 2. COOKIE MANAGER & PERSISTENT SESSION
+# -------------------------------------------------------------
+@st.cache_resource(experimental_allow_widgets=True)
+def get_manager():
+    return stx.CookieManager()
+
+cookie_manager = get_manager()
+
+# -------------------------------------------------------------
+# 3. SUPABASE CLOUD DATABASE CONNECTION
 # -------------------------------------------------------------
 SUPABASE_URL = "https://cypljfetstxffzyszmch.supabase.co"
 SUPABASE_KEY = "PASTE_YOUR_COPIED_ANON_KEY_HERE"
@@ -100,6 +110,18 @@ except Exception:
 
 def hash_password(password: str) -> str:
     return hashlib.sha256(password.strip().encode()).hexdigest()
+
+def update_user_activity(email):
+    if not supabase_client or not email:
+        return
+    try:
+        platform_info = "Windows App" if "dist" in os.getcwd() else "Web/Mobile"
+        supabase_client.table("users_profile").update({
+            "last_active": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            "current_platform": platform_info
+        }).eq("email", email.strip().lower()).execute()
+    except Exception:
+        pass
 
 def db_register_user(full_name, email, phone, password, plan="Free Tier"):
     if not supabase_client:
@@ -133,24 +155,22 @@ def db_authenticate_user(email, password):
         if res.data and len(res.data) > 0:
             user_data = res.data[0]
             if user_data.get("password_hash") == hashed:
-                # Update last active timestamp and platform on login
                 update_user_activity(clean_email)
                 return True, user_data
         return False, None
     except Exception:
         return False, None
 
-def update_user_activity(email):
+def db_get_user_by_email(email):
     if not supabase_client or not email:
-        return
+        return None
     try:
-        platform_info = "Windows App" if "dist" in os.getcwd() else "Web/Mobile"
-        supabase_client.table("users_profile").update({
-            "last_active": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-            "current_platform": platform_info
-        }).eq("email", email.strip().lower()).execute()
+        res = supabase_client.table("users_profile").select("*").eq("email", email.strip().lower()).execute()
+        if res.data and len(res.data) > 0:
+            return res.data[0]
+        return None
     except Exception:
-        pass
+        return None
 
 def db_reset_password(email, new_password):
     if not supabase_client:
@@ -165,7 +185,7 @@ def db_reset_password(email, new_password):
     except Exception as e:
         return False, str(e)
 
-# Session States
+# Session States initialization
 if "authenticated" not in st.session_state:
     st.session_state["authenticated"] = False
 if "user_data" not in st.session_state:
@@ -173,9 +193,18 @@ if "user_data" not in st.session_state:
 if "current_view" not in st.session_state:
     st.session_state["current_view"] = "home"
 
+# --- PERSISTENT COOKIE AUTO-LOGIN ---
+saved_user_email = cookie_manager.get(cookie="threatlens_user_email")
+if saved_user_email and not st.session_state["authenticated"]:
+    cached_user = db_get_user_by_email(saved_user_email)
+    if cached_user:
+        st.session_state["authenticated"] = True
+        st.session_state["user_data"] = cached_user
+        update_user_activity(saved_user_email)
+
 
 # -------------------------------------------------------------
-# 3. AUTHENTICATION (LOGIN, SIGN UP, FORGOT PASSWORD)
+# 4. AUTHENTICATION (LOGIN, SIGN UP, FORGOT PASSWORD)
 # -------------------------------------------------------------
 if not st.session_state["authenticated"]:
     st.markdown("# 🛡️ ThreatLens")
@@ -189,6 +218,7 @@ if not st.session_state["authenticated"]:
             st.subheader("Account Login")
             login_email = st.text_input("Registered Email Address")
             login_pass = st.text_input("Password", type="password")
+            remember_me = st.checkbox("Remember Me on this device", value=True)
             submit_login = st.form_submit_button("Sign In", type="primary", use_container_width=True)
 
             if submit_login:
@@ -200,6 +230,8 @@ if not st.session_state["authenticated"]:
                         st.session_state["authenticated"] = True
                         st.session_state["user_data"] = u_data
                         st.session_state["current_view"] = "home"
+                        if remember_me:
+                            cookie_manager.set("threatlens_user_email", login_email.strip().lower(), expires_at=datetime.datetime.now() + datetime.timedelta(days=30))
                         st.rerun()
                     else:
                         st.error("Invalid email or password.")
@@ -263,12 +295,11 @@ if not st.session_state["authenticated"]:
 
 
 # -------------------------------------------------------------
-# 4. DASHBOARD VIEW (2 FREE + 6 PRO)
+# 5. DASHBOARD VIEW (2 FREE + 6 PRO)
 # -------------------------------------------------------------
 user_info = st.session_state.get("user_data", {})
 is_pro = (user_info.get("plan_tier") == "Pro Tier")
 
-# Trigger session activity update
 update_user_activity(user_info.get("email", ""))
 
 if st.session_state["current_view"] == "home":
@@ -283,11 +314,12 @@ if st.session_state["current_view"] == "home":
             st.rerun()
     with c_btn2:
         if st.button("🚪 Log Out", use_container_width=True):
+            cookie_manager.delete("threatlens_user_email")
             st.session_state["authenticated"] = False
             st.session_state["user_data"] = {}
             st.rerun()
 
-    # --- DEVELOPER ADMIN PANEL (Real-time Live User Monitoring) ---
+    # --- ADMIN TELEMETRY ---
     with st.expander("👑 Admin Dashboard: Live Users & App Telemetry"):
         if supabase_client:
             res = supabase_client.table("users_profile").select("full_name, email, phone, plan_tier, current_platform, last_active, created_at").order("last_active", desc=True).execute()
@@ -347,7 +379,7 @@ if st.session_state["current_view"] == "home":
 
 
 # -------------------------------------------------------------
-# 5. TOOL VIEWS & WORKFLOW
+# 6. TOOL VIEWS & WORKFLOW
 # -------------------------------------------------------------
 else:
     if st.button("⬅️ Back to Dashboard"):

@@ -87,11 +87,7 @@ st.markdown("""
 # -------------------------------------------------------------
 # 2. COOKIE MANAGER & PERSISTENT SESSION
 # -------------------------------------------------------------
-@st.cache_resource
-def get_manager():
-    return stx.CookieManager(key="threatlens_cookie_manager")
-
-cookie_manager = get_manager()
+cookie_manager = stx.CookieManager()
 # -------------------------------------------------------------
 # 3. SUPABASE CLOUD DATABASE CONNECTION
 # -------------------------------------------------------------

@@ -87,12 +87,14 @@ st.markdown("""
 # -------------------------------------------------------------
 # 2. COOKIE MANAGER & PERSISTENT SESSION
 # -------------------------------------------------------------
-cookie_manager = stx.CookieManager()
+cookie_manager = stx.CookieManager(key="threatlens_cookie_manager")
+
 # -------------------------------------------------------------
 # 3. SUPABASE CLOUD DATABASE CONNECTION
 # -------------------------------------------------------------
 SUPABASE_URL = "https://cypljfetstxffzyszmch.supabase.co"
-SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN5cGxqZmV0c3R4ZmZ6eXN6bWNoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY4ODUzOTMsImV4cCI6MjEwMjQ2MTM5M30.rXphKEWyAyN_m5HfqMEyxO3R4P9m9u9u9UjLO3zwTBk"  # Paste the full string
+SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN5cGxqZmV0c3R4ZmZ6eXN6bWNoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY4ODUzOTMsImV4cCI6MjEwMjQ2MTM5M30.rXphKEWyAyN_m5HfqMEyxO3R4P9m9u9u9UjLO3zwTBk"
+
 @st.cache_resource
 def init_supabase() -> Client:
     return create_client(SUPABASE_URL, SUPABASE_KEY)
@@ -189,13 +191,14 @@ if "current_view" not in st.session_state:
 
 # --- PERSISTENT COOKIE AUTO-LOGIN ---
 saved_user_email = cookie_manager.get(cookie="threatlens_user_email")
+
 if saved_user_email and not st.session_state["authenticated"]:
     cached_user = db_get_user_by_email(saved_user_email)
     if cached_user:
         st.session_state["authenticated"] = True
         st.session_state["user_data"] = cached_user
         update_user_activity(saved_user_email)
-
+        st.rerun()
 
 # -------------------------------------------------------------
 # 4. AUTHENTICATION (LOGIN, SIGN UP, FORGOT PASSWORD)
@@ -225,7 +228,12 @@ if not st.session_state["authenticated"]:
                         st.session_state["user_data"] = u_data
                         st.session_state["current_view"] = "home"
                         if remember_me:
-                            cookie_manager.set("threatlens_user_email", login_email.strip().lower(), expires_at=datetime.datetime.now() + datetime.timedelta(days=30))
+                            cookie_manager.set(
+                                "threatlens_user_email",
+                                login_email.strip().lower(),
+                                expires_at=datetime.datetime.now() + datetime.timedelta(days=30),
+                                key="set_login_cookie"
+                            )
                         st.rerun()
                     else:
                         st.error("Invalid email or password.")
@@ -308,9 +316,10 @@ if st.session_state["current_view"] == "home":
             st.rerun()
     with c_btn2:
         if st.button("🚪 Log Out", use_container_width=True):
-            cookie_manager.delete("threatlens_user_email")
+            cookie_manager.delete("threatlens_user_email", key="delete_cookie_logout")
             st.session_state["authenticated"] = False
             st.session_state["user_data"] = {}
+            time.sleep(0.3)
             st.rerun()
 
     # --- ADMIN TELEMETRY ---
@@ -418,8 +427,10 @@ else:
             mem = psutil.virtual_memory().percent
             score = int((cpu * 0.4) + (mem * 0.4))
             st.metric("System Threat Index", f"{score}/100")
-            if score < 40: st.success("System baseline healthy.")
-            else: st.warning("High utilization detected.")
+            if score < 40:
+                st.success("System baseline healthy.")
+            else:
+                st.warning("High utilization detected.")
 
     # Recon Scanner (Pro)
     elif st.session_state["current_view"] == "recon":
@@ -448,8 +459,10 @@ else:
             if st.button("Verify"):
                 sha = hashlib.sha1(pwd.encode()).hexdigest().upper()
                 r = requests.get(f"https://api.pwnedpasswords.com/range/{sha[:5]}", timeout=4)
-                if sha[5:] in r.text: st.error("⚠️ Password compromised in public data breaches.")
-                else: st.success("✅ Secure password.")
+                if sha[5:] in r.text:
+                    st.error("⚠️ Password compromised in public data breaches.")
+                else:
+                    st.success("✅ Secure password.")
 
     # IP Intelligence (Pro)
     elif st.session_state["current_view"] == "ip_intel":

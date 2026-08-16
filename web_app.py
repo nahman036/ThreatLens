@@ -87,7 +87,7 @@ st.markdown("""
 # 2. SUPABASE CLOUD DATABASE CONNECTION
 # -------------------------------------------------------------
 SUPABASE_URL = "https://cypljfetstxffzyszmch.supabase.co"
-SUPABASE_KEY = "PASTE_YOUR_COPIED_ANON_KEY_HERE"
+SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN5cGxqZmV0c3R4ZmZ6eXN6bWNoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY4ODUzOTMsImV4cCI6MjEwMjQ2MTM5M30.rXphKEWyAyN_m5HfqMEyxO3R4P9m9u9u9UjLO3zwTBk"
 
 @st.cache_resource
 def init_supabase() -> Client:

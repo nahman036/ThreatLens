@@ -87,7 +87,7 @@ st.markdown("""
 # 2. SUPABASE CLOUD DATABASE CONNECTION
 # -------------------------------------------------------------
 SUPABASE_URL = "https://cypljfetstxffzyszmch.supabase.co"
-SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN5cGxqZmV0c3R4ZmZ6eXN6bWNoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY4ODUzOTMsImV4cCI6MjEwMjQ2MTM5M30.rXphKEWyAyN_m5HfqMEyxO3R4P9m9u9u9UjLO3zwTBk"
+SUPABASE_KEY = "PASTE_YOUR_COPIED_ANON_KEY_HERE"
 
 @st.cache_resource
 def init_supabase() -> Client:
@@ -95,7 +95,7 @@ def init_supabase() -> Client:
 
 try:
     supabase_client = init_supabase()
-except Exception as e:
+except Exception:
     supabase_client = None
 
 def hash_password(password: str) -> str:
@@ -110,9 +110,11 @@ def db_register_user(full_name, email, phone, password, plan="Free Tier"):
             "email": email.strip().lower(),
             "phone": phone.strip(),
             "password_hash": hash_password(password),
-            "plan_tier": plan
+            "plan_tier": plan,
+            "current_platform": "Windows App" if "dist" in os.getcwd() else "Web/Mobile",
+            "last_active": datetime.datetime.now(datetime.timezone.utc).isoformat()
         }
-        res = supabase_client.table("users_profile").insert(data).execute()
+        supabase_client.table("users_profile").insert(data).execute()
         return True, "Registration successful!"
     except Exception as e:
         err_msg = str(e)
@@ -127,22 +129,36 @@ def db_authenticate_user(email, password):
         clean_email = email.strip().lower()
         clean_pass = password.strip()
         hashed = hash_password(clean_pass)
-        
         res = supabase_client.table("users_profile").select("*").eq("email", clean_email).execute()
         if res.data and len(res.data) > 0:
             user_data = res.data[0]
             if user_data.get("password_hash") == hashed:
+                # Update last active timestamp and platform on login
+                update_user_activity(clean_email)
                 return True, user_data
         return False, None
     except Exception:
         return False, None
 
+def update_user_activity(email):
+    if not supabase_client or not email:
+        return
+    try:
+        platform_info = "Windows App" if "dist" in os.getcwd() else "Web/Mobile"
+        supabase_client.table("users_profile").update({
+            "last_active": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            "current_platform": platform_info
+        }).eq("email", email.strip().lower()).execute()
+    except Exception:
+        pass
+
 def db_reset_password(email, new_password):
     if not supabase_client:
         return False, "Database offline."
     try:
+        clean_email = email.strip().lower()
         hashed = hash_password(new_password)
-        res = supabase_client.table("users_profile").update({"password_hash": hashed}).eq("email", email.strip().lower()).execute()
+        res = supabase_client.table("users_profile").update({"password_hash": hashed}).eq("email", clean_email).execute()
         if res.data and len(res.data) > 0:
             return True, "Password updated successfully!"
         return False, "Email address not found in database."
@@ -252,6 +268,9 @@ if not st.session_state["authenticated"]:
 user_info = st.session_state.get("user_data", {})
 is_pro = (user_info.get("plan_tier") == "Pro Tier")
 
+# Trigger session activity update
+update_user_activity(user_info.get("email", ""))
+
 if st.session_state["current_view"] == "home":
     st.markdown("# 🛡️ ThreatLens")
     badge = "⭐ PRO TIER" if is_pro else "FREE TIER"
@@ -267,6 +286,17 @@ if st.session_state["current_view"] == "home":
             st.session_state["authenticated"] = False
             st.session_state["user_data"] = {}
             st.rerun()
+
+    # --- DEVELOPER ADMIN PANEL (Real-time Live User Monitoring) ---
+    with st.expander("👑 Admin Dashboard: Live Users & App Telemetry"):
+        if supabase_client:
+            res = supabase_client.table("users_profile").select("full_name, email, phone, plan_tier, current_platform, last_active, created_at").order("last_active", desc=True).execute()
+            if res.data:
+                df = pd.DataFrame(res.data)
+                st.metric("Total Registered Users", len(df))
+                st.dataframe(df, use_container_width=True)
+        else:
+            st.warning("Database connection offline.")
 
     st.write("")
 

@@ -33,8 +33,8 @@ def get_base64_image(image_path):
     # Fallback to online avatar if local file is missing
     return "https://github.com/nahman036.png"
 
-# Direct GitHub Avatar Link (Works universally across Cloud, Android, and Desktop)
-DEV_AVATAR_SRC = "https://avatars.githubusercontent.com/u/nahman036?v=4"
+# Direct working GitHub raw avatar URL
+DEV_AVATAR_SRC = "https://github.com/nahman036.png"
 # CSS Styling
 st.markdown("""
 <style>
@@ -262,7 +262,7 @@ if not st.session_state["authenticated"]:
     # Developer Photo & Bio Card on Login Screen
     st.markdown(f"""
     <div class="developer-card">
-        <img src="{DEV_AVATAR_SRC}" class="dev-avatar" alt="Nahman Sajad Khan" onerror="this.src='https://github.com/nahman036.png'"/>
+        <img src="{DEV_AVATAR_SRC}" class="dev-avatar" alt="Nahman Sajad Khan" onerror="this.onerror=null; this.src='https://ui-avatars.com/api/?name=Nahman+Sajad&background=0D8ABC&color=fff&size=128';"/>
         <div>
             <h4 style="margin:0 0 4px 0; color:#e2e8f0;">👨‍💻 Nahman Sajad Khan</h4>
             <p style="margin:0; font-size:0.85rem; color:#94a3b8;">Cybersecurity & Python Engineer</p>

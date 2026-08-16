@@ -8,9 +8,10 @@ import os
 import time
 import pandas as pd
 import datetime
+import base64
 
 # -------------------------------------------------------------
-# 1. PAGE CONFIGURATION & SMOOTH CSS STYLING
+# 1. PAGE CONFIGURATION & STYLING
 # -------------------------------------------------------------
 st.set_page_config(
     page_title="ThreatLens",
@@ -19,7 +20,22 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Smooth performance CSS & Dark Modern Card Theme
+# Function to convert local image to Base64 data URI
+def get_base64_image(image_path):
+    full_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), image_path)
+    if os.path.exists(full_path):
+        try:
+            with open(full_path, "rb") as f:
+                encoded = base64.b64encode(f.read()).decode()
+                return f"data:image/jpeg;base64,{encoded}"
+        except Exception:
+            pass
+    # Fallback to online avatar if local file is missing
+    return "https://github.com/nahman036.png"
+
+# Direct GitHub Avatar Link (Works universally across Cloud, Android, and Desktop)
+DEV_AVATAR_SRC = "https://avatars.githubusercontent.com/u/nahman036?v=4"
+# CSS Styling
 st.markdown("""
 <style>
     [data-testid="stSidebar"] {
@@ -31,7 +47,6 @@ st.markdown("""
         padding: 18px;
         margin-bottom: 12px;
         border: 1px solid #2a3449;
-        transition: transform 0.15s ease-in-out;
     }
     .developer-card {
         background-color: #111827;
@@ -81,16 +96,12 @@ st.markdown("""
     }
     .stButton > button {
         border-radius: 8px;
-        transition: all 0.2s ease;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# Developer Avatar URL (Direct GitHub Profile Image)
-DEV_PHOTO_URL = "developer.jpg"
-
 # -------------------------------------------------------------
-# 2. PERSISTENT STORAGE (Local Fallback + Multi-Device Schema)
+# 2. PERSISTENT STORAGE
 # -------------------------------------------------------------
 USER_DB_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "users.json")
 
@@ -109,7 +120,18 @@ def load_users():
     try:
         with open(USER_DB_FILE, "r", encoding="utf-8") as f:
             data = json.load(f)
-            return data if isinstance(data, dict) and data else default_users
+            updated = {}
+            for k, v in data.items():
+                if isinstance(v, str):
+                    # Migrates old format {"user": "pass"} -> {"user": {"password": "...", ...}}
+                    updated[k.lower()] = {"password": v, "plan": "Free Tier", "recovery_key": "threatlens"}
+                elif isinstance(v, dict):
+                    updated[k.lower()] = {
+                        "password": v.get("password", "admin123"),
+                        "plan": v.get("plan", "Free Tier"),
+                        "recovery_key": v.get("recovery_key", "threatlens")
+                    }
+            return updated if updated else default_users
     except Exception:
         return default_users
 
@@ -237,10 +259,10 @@ if not st.session_state["authenticated"]:
                 else:
                     st.error("Username not found in database.")
 
-    # Developer Avatar & Bio Card
+    # Developer Photo & Bio Card on Login Screen
     st.markdown(f"""
     <div class="developer-card">
-        <img src="{DEV_PHOTO_URL}" class="dev-avatar" alt="Nahman Sajad Khan" onerror="this.src='https://cdn-icons-png.flaticon.com/512/3135/3135715.png'"/>
+        <img src="{DEV_AVATAR_SRC}" class="dev-avatar" alt="Nahman Sajad Khan" onerror="this.src='https://github.com/nahman036.png'"/>
         <div>
             <h4 style="margin:0 0 4px 0; color:#e2e8f0;">👨‍💻 Nahman Sajad Khan</h4>
             <p style="margin:0; font-size:0.85rem; color:#94a3b8;">Cybersecurity & Python Engineer</p>
@@ -379,10 +401,10 @@ if st.session_state["current_view"] == "home":
         st.session_state["current_view"] = "telemetry"
         st.rerun()
 
-    # Developer Avatar & Bio Card (Footer)
+    # Developer Photo & Bio Card (Footer)
     st.markdown(f"""
     <div class="developer-card">
-        <img src="{DEV_PHOTO_URL}" class="dev-avatar" alt="Nahman Sajad Khan" onerror="this.src='https://cdn-icons-png.flaticon.com/512/3135/3135715.png'"/>
+        <img src="{DEV_AVATAR_SRC}" class="dev-avatar" alt="Nahman Sajad Khan" onerror="this.src='https://github.com/nahman036.png'"/>
         <div>
             <h4 style="margin:0 0 4px 0; color:#e2e8f0;">👨‍💻 Nahman Sajad Khan</h4>
             <p style="margin:0; font-size:0.85rem; color:#94a3b8;">Developer & Maintainer | ThreatLens Suite v1.0.4</p>
@@ -443,7 +465,7 @@ else:
                 st.session_state["current_view"] = "upgrade"
                 st.rerun()
         else:
-            cpu = psutil.cpu_percent(interval=None) # Non-blocking for fast execution
+            cpu = psutil.cpu_percent(interval=None)
             mem = psutil.virtual_memory().percent
             active_conns = len(psutil.net_connections())
             

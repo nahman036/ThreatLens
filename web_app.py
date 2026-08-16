@@ -124,8 +124,11 @@ def db_authenticate_user(email, password):
     if not supabase_client:
         return False, None
     try:
-        hashed = hash_password(password)
-        res = supabase_client.table("users_profile").select("*").eq("email", email.strip().lower()).execute()
+        clean_email = email.strip().lower()
+        clean_pass = password.strip()
+        hashed = hash_password(clean_pass)
+        
+        res = supabase_client.table("users_profile").select("*").eq("email", clean_email).execute()
         if res.data and len(res.data) > 0:
             user_data = res.data[0]
             if user_data.get("password_hash") == hashed:
